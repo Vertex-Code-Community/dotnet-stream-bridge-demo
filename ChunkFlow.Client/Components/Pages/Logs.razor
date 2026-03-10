@@ -1,0 +1,111 @@
+@page "/logs"
+@rendermode InteractiveServer
+@inject ILogClientService LogClient
+@inject IJSRuntime JS
+@inject ILogger<Logs> Logger
+<PageTitle>ChunkFlow Client</PageTitle>
+
+<div class="client-page">
+  <header class="client-toolbar">
+    <h1>ChunkFlow Client</h1>
+    <div class="client-actions">
+      <button class="btn btn-primary" @onclick="GenerateLogsAsync" disabled="@_generating">
+        @(_generating ? "Generating…" : "Generate Logs")
+      </button>
+      <span class="client-status">@_status</span>
+    </div>
+  </header>
+  <div class="client-card">
+    @if (_logCount >= 0)
+    {
+      <p>Stored logs: <strong>@_logCount</strong></p>
+    }
+    @if (!string.IsNullOrEmpty(_streamStatus))
+    {
+      <p class="stream-status">@_streamStatus</p>
+    }
+  </div>
+</div>
+
+@code {
+  private string _status = string.Empty;
+  private string _streamStatus = string.Empty;
+  private int _logCount = -1;
+  private bool _generating;
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (!firstRender) return;
+    await TryStreamFromQueryAsync();
+    await RefreshCountAsync();
+  }
+
+  private async Task RefreshCountAsync()
+  {
+    try
+    {
+      _logCount = await LogClient.GetLogCountAsync();
+      StateHasChanged();
+    }
+    catch (Exception ex)
+    {
+      Logger.LogWarning(ex, "Get log count failed");
+    }
+  }
+
+  private async Task TryStreamFromQueryAsync()
+  {
+    var query = await JS.InvokeAsync<ChunkFlowQuery>("getChunkFlowQuery");
+    if (string.IsNullOrEmpty(query.RequestId) || string.IsNullOrEmpty(query.ApiUrl))
+      return;
+    var requestId = query.RequestId;
+    var apiUrl = query.ApiUrl;
+
+    _streamStatus = "Streaming to API…";
+    StateHasChanged();
+    try
+    {
+      var count = await LogClient.StreamLogsToApiAsync(apiUrl, requestId, null);
+      _streamStatus = $"Streamed {count:N0} logs.";
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Stream failed");
+      _streamStatus = $"Error: {ex.Message}";
+    }
+
+    StateHasChanged();
+  }
+
+  private async Task GenerateLogsAsync()
+  {
+    if (_generating) return;
+    _generating = true;
+    _status = "Starting…";
+    StateHasChanged();
+    try
+    {
+      var count = await LogClient.GenerateLogsAsync(null);
+      _status = $"Generated {count:N0} logs.";
+      _logCount = count;
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Generate failed");
+      _status = $"Error: {ex.Message}";
+    }
+    finally
+    {
+      _generating = false;
+      StateHasChanged();
+    }
+  }
+
+  private sealed class ChunkFlowQuery
+  {
+    [System.Text.Json.Serialization.JsonPropertyName("requestId")]
+    public string RequestId { get; set; } = string.Empty;
+    [System.Text.Json.Serialization.JsonPropertyName("apiUrl")]
+    public string ApiUrl { get; set; } = string.Empty;
+  }
+}

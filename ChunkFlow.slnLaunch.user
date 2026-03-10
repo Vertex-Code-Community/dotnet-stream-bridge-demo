@@ -1,0 +1,19 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "ChunkFlow.Client\\ChunkFlow.Client.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "ChunkFlow.Viewer\\ChunkFlow.Viewer.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "ChunkFlow.Api\\ChunkFlow.Api.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

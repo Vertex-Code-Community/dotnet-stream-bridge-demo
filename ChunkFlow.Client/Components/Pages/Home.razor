@@ -1,0 +1,11 @@
+@page "/"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+<PageTitle>ChunkFlow Client</PageTitle>
+
+@code {
+  protected override void OnInitialized()
+  {
+    Navigation.NavigateTo("/logs", replace: true);
+  }
+}

@@ -1,0 +1,11 @@
+@page "/"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+<PageTitle>ChunkFlow Viewer</PageTitle>
+
+@code {
+  protected override void OnInitialized()
+  {
+    Navigation.NavigateTo("/logs", replace: true);
+  }
+}

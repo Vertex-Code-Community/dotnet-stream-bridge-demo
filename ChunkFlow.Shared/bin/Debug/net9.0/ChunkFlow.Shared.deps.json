@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "ChunkFlow.Shared/1.0.0": {
+        "runtime": {
+          "ChunkFlow.Shared.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ChunkFlow.Shared/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

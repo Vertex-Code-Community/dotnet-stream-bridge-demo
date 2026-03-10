@@ -1,0 +1,154 @@
+@page "/logs"
+@rendermode InteractiveServer
+@inject ILogViewerService LogViewer
+@inject IJSRuntime JS
+@inject ILogger<Logs> Logger
+<PageTitle>ChunkFlow Viewer</PageTitle>
+
+<div class="viewer">
+  <header class="viewer-toolbar">
+    <h1>ChunkFlow Viewer</h1>
+    <div class="viewer-actions">
+      <button class="btn btn-fetch" @onclick="FetchLogsAsync" disabled="@_fetching">@(_fetching ? _statusMessage : "Fetch Logs")</button>
+      <button class="btn btn-clear" @onclick="ClearLogs" disabled="@(_logs.Count == 0)">Clear Logs</button>
+      <div class="viewer-mode-toggle">
+        <span>Mode:</span>
+        <button type="button" class="btn-mode @(_streamingMode ? "active" : "")" @onclick="@(() => SetMode(true))" disabled="@_fetching">Streaming</button>
+        <button type="button" class="btn-mode @(!_streamingMode ? "active" : "")" @onclick="@(() => SetMode(false))" disabled="@_fetching">Get All</button>
+      </div>
+      @if (_fetching)
+      {
+        <span class="viewer-progress" aria-label="In progress"></span>
+        @if (!string.IsNullOrEmpty(_pendingClientUrl))
+        {
+          <a href="@_pendingClientUrl" target="_blank" rel="noopener" class="viewer-open-client">Open Client tab (if popup was blocked)</a>
+        }
+      }
+      <span class="viewer-counter">Received @_logs.Count.ToString("N0") logs</span>
+      @if (_lastFetchElapsedMs.HasValue)
+      {
+        <span class="viewer-timing">@(_streamingMode ? "Streaming" : "Get All"): @(_lastFetchElapsedMs.Value / 1000.0) s</span>
+      }
+    </div>
+  </header>
+
+  <div class="viewer-card">
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+      <p class="viewer-error">@_errorMessage</p>
+    }
+    @if (_lastFetchElapsedMs.HasValue && _logs.Count == 0 && string.IsNullOrEmpty(_errorMessage))
+    {
+      <p class="viewer-error">No logs received. Generate logs in the Client first, then try Fetch again. Allow popups for the Client tab.</p>
+    }
+    <p class="viewer-hint">1) In the Client tab, click &quot;Generate Logs&quot; first. 2) Click &quot;Fetch Logs&quot; here (allow the popup). 3) The Client tab will stream logs to this Viewer.</p>
+    <div class="viewer-list-container">
+      <Virtualize ItemsProvider="@GetLogsProvider" Context="log">
+        <div class="log-row">
+          <span class="log-time">@log.Timestamp</span>
+          <span class="log-level log-level-@log.Level.ToLowerInvariant()">@log.Level</span>
+          <span class="log-msg">@log.Message</span>
+          <span class="log-duration">@log.DurationMs ms</span>
+        </div>
+      </Virtualize>
+    </div>
+  </div>
+</div>
+
+@code {
+  private readonly List<ApiLog> _logs = new();
+  private bool _fetching;
+  private bool _streamingMode = true;
+  private string _statusMessage = "Fetch Logs";
+  private string _errorMessage = string.Empty;
+  private string _pendingClientUrl = string.Empty;
+  private double? _lastFetchElapsedMs;
+
+  private void SetMode(bool streaming)
+  {
+    if (_streamingMode == streaming) return;
+    _streamingMode = streaming;
+    _errorMessage = string.Empty;
+    StateHasChanged();
+  }
+
+  private ValueTask<ItemsProviderResult<ApiLog>> GetLogsProvider(ItemsProviderRequest request)
+  {
+    var count = _logs.Count;
+    var start = Math.Min(request.StartIndex, count);
+    var take = Math.Min(request.Count, count - start);
+    var slice = take > 0 ? _logs.Skip(start).Take(take).ToList() : new List<ApiLog>();
+    return ValueTask.FromResult(new ItemsProviderResult<ApiLog>(slice, count));
+  }
+
+  private void ClearLogs()
+  {
+    if (_logs.Count == 0) return;
+    _logs.Clear();
+    _lastFetchElapsedMs = null;
+    _errorMessage = string.Empty;
+    StateHasChanged();
+  }
+
+  private async Task FetchLogsAsync()
+  {
+    if (_fetching) return;
+    _fetching = true;
+    _errorMessage = string.Empty;
+    _lastFetchElapsedMs = null;
+    _pendingClientUrl = string.Empty;
+    _logs.Clear();
+    _statusMessage = "Opening Client…";
+    StateHasChanged();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    try
+    {
+      var (requestId, stream) = await LogViewer.StartStreamAsync();
+      var clientUrl = LogViewer.GetClientStreamUrl(requestId);
+      _pendingClientUrl = clientUrl;
+      await JS.InvokeVoidAsync("open", clientUrl, "_blank");
+      _statusMessage = "Waiting for logs…";
+      StateHasChanged();
+
+      if (_streamingMode)
+      {
+        var n = 0;
+        await foreach (var log in LogViewer.ReadStreamAsync(stream))
+        {
+          _logs.Add(log);
+          n++;
+          if (n % 15 == 0)
+            StateHasChanged();
+        }
+        StateHasChanged();
+      }
+      else
+      {
+        using var reader = new StreamReader(stream);
+        var body = await reader.ReadToEndAsync();
+        var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+          var log = System.Text.Json.JsonSerializer.Deserialize<ApiLog>(line);
+          if (log is not null)
+            _logs.Add(log);
+        }
+        StateHasChanged();
+      }
+      sw.Stop();
+      _lastFetchElapsedMs = sw.Elapsed.TotalMilliseconds;
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Fetch logs failed");
+      _errorMessage = $"Fetch failed: {ex.Message}. Ensure API and Client are running and allow popups.";
+    }
+    finally
+    {
+      _fetching = false;
+      _pendingClientUrl = string.Empty;
+      _statusMessage = "Fetch Logs";
+      StateHasChanged();
+    }
+  }
+}
