@@ -1,0 +1,68 @@
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using ChunkFlow.Shared.Models
+
+<div class="logs-modal-content @(ShouldApplyCompact() ? "compact" : "")">
+    <div class="header">
+        <h4>User Logs (@Username)</h4>
+        <button class="btn btn-close" @onclick="() => OnCloseModal.InvokeAsync()"></button>
+    </div>
+
+    <div class="modal-body">
+
+        @if (LogsModel.Any())
+        {
+            <div class="logs-filters">
+                <input class="filter-input" placeholder="Filter by Header" @bind="FilterHeader" />
+                <input class="filter-input" placeholder="Filter by URL" @bind="FilterUrl" />
+                <input class="filter-input" placeholder="Filter by Request" @bind="FilterRequest" />
+                <input class="filter-input narrow" placeholder="Min Execution Time (ms)" type="number" @bind="MinExecutionTime" />
+                <input class="filter-input narrow" placeholder="Max Execution Time (ms)" type="number" @bind="MaxExecutionTime" />
+                <input class="filter-input narrow" placeholder="Status Code" type="number" @bind="StatusCodeFilter" />
+                <div class="filter-actions">
+                    <button class="btn btn-apply" @onclick="ApplyFilters">Apply</button>
+                    <button class="btn btn-reset" @onclick="ResetFilters">Reset</button>
+                </div>
+            </div>
+
+            @if (_pagedLogs.Any())
+            {
+                <div class="data-wrapper">
+                    <div class="logs-list">
+                        @foreach (var log in _pagedLogs)
+                        {
+                            <div class="log-item" @key="log.Id">
+                                <p><strong>ID:</strong> @log.Id</p>
+                                <p><strong>Timestamp:</strong> @log.Timestamp</p>
+                                <p><strong>Requester:</strong> @log.Requester</p>
+                                <p><strong>Header:</strong> @log.Header</p>
+                                <p><strong>URL:</strong> @log.Url</p>
+                                <p><strong>Execution Time (ms):</strong> @log.ExecutionTimeMs</p>
+                                <p><strong>Status Code:</strong> @log.StatusCode</p>
+                                <p><strong>Request:</strong></p>
+                                <pre class="log-json">@((MarkupString)(log.FormattedRequest ?? log.Request))</pre>
+                                <p><strong>Response:</strong></p>
+                                <pre class="log-json">@((MarkupString)(log.FormattedResponse ?? log.Response))</pre>
+                            </div>
+
+                            <div class="line" />
+                        }
+                    </div>
+
+                    <div class="logs-footer">
+                        <button class="btn page-btn" disabled="@(_currentPage <= 1)" @onclick="() => HandlePageChange(_currentPage - 1)">Prev</button>
+                        <span>@_currentPage / @_totalPages</span>
+                        <button class="btn page-btn" disabled="@(_currentPage >= _totalPages)" @onclick="() => HandlePageChange(_currentPage + 1)">Next</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="error-message">No logs match current filters.</p>
+            }
+        }
+        else
+        {
+            <p class="error-message">No logs available for @Username with session ID: @ConnectionId</p>
+        }
+    </div>
+</div>

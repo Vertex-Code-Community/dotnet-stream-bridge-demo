@@ -1,0 +1,44 @@
+@using ChunkFlow.Shared.Models
+@using ChunkFlow.Client.Services.Logs
+
+<div class="dropdown-section">
+    <h3>Api Logs</h3>
+    @if (_isLoading)
+    {
+        <p>Loading...</p>
+    }
+    else if (_response is null)
+    {
+        <button class="btn table-btn"
+                @onclick="OnReloadAsync">
+            <p>Get Logs</p>
+        </button>
+    }
+    else
+    {
+        <div class="buttons-group">
+            <button class="btn table-btn"
+                    @onclick="OnShowModalAsync">
+                <p>Show Logs</p>
+            </button>
+            <button class="btn btn-reload table-btn"
+                    @onclick="OnReloadAsync">
+                <span class="reload-icon" />
+            </button>
+        </div>
+    }
+</div>
+
+@if (_showModal && _response is not null)
+{
+    <LogsDialogComponent Username="@Username"
+                         LogsModel="_response"
+                         OnCloseModal="() => { _showModal = false; StateHasChanged(); }"
+                         ConnectionId="@ConnectionId" />
+}
+
+<style>
+    .modal-wrapper {
+        align-items: center;
+    }
+</style>
