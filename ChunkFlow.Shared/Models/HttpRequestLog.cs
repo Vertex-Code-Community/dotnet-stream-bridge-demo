@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace ChunkFlow.Shared.Models;
 
-public class ApiRequestLog
+public class HttpRequestLog
 {
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;

@@ -3,24 +3,24 @@ using Newtonsoft.Json;
 using ChunkFlow.Client.Helpers;
 using ChunkFlow.Shared.Models.Commands;
 
-namespace ChunkFlow.Client.Services.DataBridgeStream;
+namespace ChunkFlow.Client.Services.CommandStream;
 
-public class DataBridgeStreamService : IDataBridgeStreamService
+public class CommandStreamService : ICommandStreamService
 {
     private readonly HttpClient _httpClient;
 
-    public DataBridgeStreamService(HttpClient httpClient)
+    public CommandStreamService(HttpClient httpClient)
     {
         _httpClient = httpClient;
     }
 
-    public async Task<List<TItem>?> ExecuteAsync<TItem>(string connectionId, BaseCommand command) where TItem : class, new()
+    public async Task<List<TItem>?> ExecuteAsync<TItem>(string connectionId, RemoteCommand command) where TItem : class, new()
     {
-        var commandJson = JsonConvert.SerializeObject(command, new CommandConverter());
+        var commandJson = JsonConvert.SerializeObject(command, new RemoteCommandConverter());
 
         var request = new { ConnectionId = connectionId, CommandJson = commandJson };
 
-        var response = await _httpClient.PostAsJsonAsync("/api/DataBridgeStream/stream", request);
+        var response = await _httpClient.PostAsJsonAsync("/api/Logs/stream", request);
         response.EnsureSuccessStatusCode();
 
         var stream = await response.Content.ReadAsStreamAsync();

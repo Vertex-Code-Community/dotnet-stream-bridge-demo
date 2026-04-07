@@ -74,12 +74,12 @@
   text-decoration: underline;
 }
 
-.btn-fetch {
-  background: var(--viewer-btn-fetch-bg, #22c55e);
+.btn-get-logs {
+  background: var(--viewer-btn-get-logs-bg, #22c55e);
   color: #fff;
 }
 
-.btn-fetch:hover:not(:disabled) {
+.btn-get-logs:hover:not(:disabled) {
   background: #16a34a;
 }
 

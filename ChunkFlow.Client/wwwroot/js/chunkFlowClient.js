@@ -1,5 +1,6 @@
 const DB_NAME = 'ChunkFlowLogs';
-const STORE_NAME = 'ApiLogs';
+const DB_VERSION = 2;
+const STORE_NAME = 'logEntries';
 const CHUNK_SIZE_BYTES = 4 * 1024;
 const BATCH_SIZE = 1000;
 const TOTAL_LOGS = 1000;
@@ -7,11 +8,14 @@ const LEVELS = ['Debug', 'Info', 'Warning', 'Error'];
 
 function openDb() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
+      if (e.oldVersion < 2 && db.objectStoreNames.contains('ApiLogs')) {
+        db.deleteObjectStore('ApiLogs');
+      }
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }

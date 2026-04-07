@@ -2,7 +2,7 @@
 @using ChunkFlow.Client.Services.Logs
 
 <div class="dropdown-section">
-    <h3>Api Logs</h3>
+    <h3>Remote logs</h3>
     @if (_isLoading)
     {
         <p>Loading...</p>
@@ -31,10 +31,10 @@
 
 @if (_showModal && _response is not null)
 {
-    <LogsDialogComponent Username="@Username"
-                         LogsModel="_response"
-                         OnCloseModal="() => { _showModal = false; StateHasChanged(); }"
-                         ConnectionId="@ConnectionId" />
+    <LogDetailDialog Username="@Username"
+                     LogsModel="_response"
+                     OnCloseModal="() => { _showModal = false; StateHasChanged(); }"
+                     ConnectionId="@ConnectionId" />
 }
 
 <style>

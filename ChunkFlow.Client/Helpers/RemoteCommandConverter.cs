@@ -5,14 +5,14 @@ using System.Reflection;
 
 namespace ChunkFlow.Client.Helpers;
 
-public class CommandConverter : JsonConverter<BaseCommand>
+public class RemoteCommandConverter : JsonConverter<RemoteCommand>
 {
     private readonly Dictionary<string, Type> _dictionary = new();
 
-    public CommandConverter()
+    public RemoteCommandConverter()
     {
-        foreach (Type item in from myType in Assembly.GetAssembly(typeof(BaseCommand))!.GetTypes()
-                              where myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(typeof(BaseCommand))
+        foreach (Type item in from myType in Assembly.GetAssembly(typeof(RemoteCommand))!.GetTypes()
+                              where myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(typeof(RemoteCommand))
                               select myType)
         {
             _dictionary[item.Name] = item;
@@ -27,7 +27,7 @@ public class CommandConverter : JsonConverter<BaseCommand>
 
     public override bool CanRead => true;
 
-    public override void WriteJson(JsonWriter writer, BaseCommand? value, JsonSerializer serializer)
+    public override void WriteJson(JsonWriter writer, RemoteCommand? value, JsonSerializer serializer)
     {
         if (value == null!) return;
 
@@ -55,7 +55,7 @@ public class CommandConverter : JsonConverter<BaseCommand>
         commandJObject.WriteTo(writer);
     }
 
-    public override BaseCommand? ReadJson(JsonReader reader, Type objectType, BaseCommand? existingValue, bool hasExistingValue, JsonSerializer serializer)
+    public override RemoteCommand? ReadJson(JsonReader reader, Type objectType, RemoteCommand? existingValue, bool hasExistingValue, JsonSerializer serializer)
     {
         JObject jsonObject = JObject.Load(reader);
 
@@ -71,17 +71,17 @@ public class CommandConverter : JsonConverter<BaseCommand>
         parameters.Remove("CancelCommand");
 
         var type = GetTypeByCommandType((string)(jTokenType as JValue)!.Value!);
-        var obj = (BaseCommand)JsonConvert.DeserializeObject(parameters.ToString(), type!)!;
+        var obj = (RemoteCommand)JsonConvert.DeserializeObject(parameters.ToString(), type!)!;
 
         if (nextCommandJObject is not null && nextCommandJObject.HasValues)
         {
-            var nextCommand = JsonConvert.DeserializeObject<BaseCommand>(nextCommandJObject.ToString(), this);
+            var nextCommand = JsonConvert.DeserializeObject<RemoteCommand>(nextCommandJObject.ToString(), this);
             if (nextCommand != null!) obj.NextCommand = nextCommand;
         }
 
         if (cancelCommandJObject is not null && cancelCommandJObject.HasValues)
         {
-            var cancelCommand = JsonConvert.DeserializeObject<BaseCommand>(cancelCommandJObject.ToString(), this);
+            var cancelCommand = JsonConvert.DeserializeObject<RemoteCommand>(cancelCommandJObject.ToString(), this);
             if (cancelCommand != null!) obj.CancelCommand = cancelCommand;
         }
 

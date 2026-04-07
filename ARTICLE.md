@@ -6,13 +6,13 @@ A deep dive into how we built a chunked NDJSON streaming pipeline that moves API
 
 Every production system generates logs. The challenge isn't producing them — it's moving them from where they live (a client application, a remote device, a browser tab) to where they're needed (an operator's dashboard) without blowing up memory, blocking the UI, or losing data mid-transfer.
 
-The traditional approach is straightforward: the client collects logs, sends them in a single POST, the server stores them, and the viewer fetches them on demand. This works — until payloads grow large enough to cause timeouts, or the operator needs to see data as it arrives rather than after a full response completes.
+The traditional approach is straightforward: the client collects logs, sends them in a single POST, the server stores them, and the viewer loads them on demand. This works — until payloads grow large enough to cause timeouts, or the operator needs to see data as it arrives rather than after a full response completes.
 
 This article walks through a production architecture that replaces the "collect-send-fetch" model with a streaming relay pipeline. The system has three actors:
 
 * **Client** — a Blazor WebAssembly app that stores logs in IndexedDB and streams them as NDJSON chunks to an API.
 * **API** — a minimal ASP.NET Core service that acts as a relay, connecting an incoming client stream to a waiting viewer stream with zero intermediate buffering.
-* **Viewer** — a Blazor Server app that initiates the fetch, opens the client in a new tab, and consumes the stream either incrementally (streaming mode) or as a complete batch (get-all mode).
+* **Viewer** — a Blazor Server app that starts the stream, opens the client in a new tab, and consumes the response either incrementally (streaming mode) or as a complete batch (get-all mode).
 
 The full data lifecycle is: Viewer -> API -> Client -> API -> Viewer. No intermediate storage, no database — the API is a pipe, not a bucket.
 
@@ -22,22 +22,22 @@ We'll also look at how the client structures its remote requests using the Comma
 
 Before data can stream, something has to request it. In our system, every remote operation is modeled as a command object — a plain C# class that describes what to do, without knowing how or where it will be executed.
 
-### The Base Command
+### The remote command base
 
 ```csharp
-public class BaseCommand
+public class RemoteCommand
 {
-    public BaseCommand? NextCommand { get; set; }
-    public BaseCommand? CancelCommand { get; set; }
+    public RemoteCommand? NextCommand { get; set; }
+    public RemoteCommand? CancelCommand { get; set; }
 }
 ```
 
-Two optional linked commands create a lightweight chain: NextCommand runs after the primary operation completes; CancelCommand runs if the operation is aborted. This lets you compose multi-step workflows from atomic pieces — fetch logs, then clean up temp files, for example — without any orchestration layer.
+Two optional linked commands create a lightweight chain: NextCommand runs after the primary operation completes; CancelCommand runs if the operation is aborted. This lets you compose multi-step workflows from atomic pieces — get logs, then clean up temp files, for example — without any orchestration layer.
 
-### A Concrete Command
+### A concrete command
 
 ```csharp
-public class FetchLogsCommand : BaseCommand
+public class GetLogsCommand : RemoteCommand
 {
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
@@ -52,15 +52,15 @@ The Command Pattern decouples intent from transport. The code that decides what 
 
 ## Part 2: Polymorphic Command Serialization
 
-When commands cross a network boundary, standard JSON serialization loses type information. If you serialize a `FetchLogsCommand` and the receiver only expects a `BaseCommand`, how does it know which concrete class to instantiate?
+When commands cross a network boundary, standard JSON serialization loses type information. If you serialize a `GetLogsCommand` and the receiver only expects a `RemoteCommand`, how does it know which concrete class to instantiate?
 
-A custom `JsonConverter<BaseCommand>` called `CommandConverter` wraps every command in a type-discriminator envelope.
+A custom `JsonConverter<RemoteCommand>` called `RemoteCommandConverter` wraps every command in a type-discriminator envelope.
 
 ### The Envelope Format
 
 ```json
 {
-  "Type": "FetchLogsCommand",
+  "Type": "GetLogsCommand",
   "Params": {
     "StartTime": "2025-01-01T00:00:00Z",
     "EndTime": "2025-01-02T00:00:00Z"
@@ -75,15 +75,15 @@ The `Type` field carries the class name; `Params` holds the serialized propertie
 Rather than maintaining a hardcoded registry, the converter scans the assembly at construction time:
 
 ```csharp
-public class CommandConverter : JsonConverter<BaseCommand>
+public class RemoteCommandConverter : JsonConverter<RemoteCommand>
 {
     private readonly Dictionary<string, Type> _dictionary = new();
 
-    public CommandConverter()
+    public RemoteCommandConverter()
     {
-        foreach (Type item in from myType in Assembly.GetAssembly(typeof(BaseCommand))!.GetTypes()
+        foreach (Type item in from myType in Assembly.GetAssembly(typeof(RemoteCommand))!.GetTypes()
                               where myType.IsClass && !myType.IsAbstract
-                                     && myType.IsSubclassOf(typeof(BaseCommand))
+                                     && myType.IsSubclassOf(typeof(RemoteCommand))
                               select myType)
         {
             _dictionary[item.Name] = item;
@@ -92,7 +92,7 @@ public class CommandConverter : JsonConverter<BaseCommand>
 }
 ```
 
-Every concrete `BaseCommand` subclass is registered automatically. Add a new command type to the codebase, and it's immediately available for serialization — zero configuration, zero risk of forgetting to register it.
+Every concrete `RemoteCommand` subclass is registered automatically. Add a new command type to the codebase, and it's immediately available for serialization — zero configuration, zero risk of forgetting to register it.
 
 ### Recursive Serialization of Chained Commands
 
@@ -107,7 +107,7 @@ if (value.NextCommand != null!)
 }
 ```
 
-This is recursive — nested commands get the same `{ Type, Params }` envelope treatment at every level. Without this, linked commands would lose their concrete type information and deserialize as flat `BaseCommand` objects.
+This is recursive — nested commands get the same `{ Type, Params }` envelope treatment at every level. Without this, linked commands would lose their concrete type information and deserialize as flat `RemoteCommand` objects.
 
 The `ReadJson` method mirrors this: it extracts the `Type` string, looks up the concrete class, deserializes `Params` into that type, then recursively processes any linked commands by passing `this` as the converter.
 
@@ -219,7 +219,8 @@ The client is a Blazor WebAssembly application that stores generated logs in Ind
 
 ```javascript
 const DB_NAME = 'ChunkFlowLogs';
-const STORE_NAME = 'ApiLogs';
+const DB_VERSION = 2;
+const STORE_NAME = 'logEntries';
 const CHUNK_SIZE_BYTES = 4 * 1024;
 ```
 
@@ -331,7 +332,7 @@ The viewer is where the operator sits. It initiates the pipeline, opens the clie
 ### Initiating the Pipeline
 
 ```csharp
-private async Task FetchLogsAsync()
+private async Task GetLogsAsync()
 {
     _logs.Clear();
     var sw = Stopwatch.StartNew();

@@ -3,23 +3,23 @@ using ChunkFlow.Shared.Models;
 using ChunkFlow.Client.Services.Logs;
 using ChunkFlow.Client.Services.StateServices;
 
-namespace ChunkFlow.Client.Components.Pages.ApiLogs;
+namespace ChunkFlow.Client.Components.Pages.LogExplorer;
 
-public partial class ApiRequestLogsComponent : ComponentBase, IDisposable
+public partial class LogListComponent : ComponentBase, IDisposable
 {
-    [Inject] public required IClientLogsService ClientLogsService { get; set; }
-    [Inject] public required AppStateService AppStateService { get; set; }
+    [Inject] public required ILogQueryService LogQueryService { get; set; }
+    [Inject] public required LogCacheService LogCacheService { get; set; }
 
     [Parameter] public required string ConnectionId { get; set; }
     [Parameter] public required string Username { get; set; }
 
     private bool _showModal;
     private bool _isLoading;
-    private List<ApiRequestLog>? _response;
+    private List<HttpRequestLog>? _response;
 
     protected override async Task OnInitializedAsync()
     {
-        if (!AppStateService.ApiRequestLogsTasks.TryGetValue(ConnectionId, out var task)) return;
+        if (!LogCacheService.LogTasks.TryGetValue(ConnectionId, out var task)) return;
 
         _isLoading = true;
         StateHasChanged();
@@ -38,7 +38,7 @@ public partial class ApiRequestLogsComponent : ComponentBase, IDisposable
         var startDateTime = DateTime.UtcNow.AddHours(-24);
         var endDateTime = DateTime.UtcNow;
 
-        var newTask = ClientLogsService.GetApiRequestLogsAsync(ConnectionId, startDateTime, endDateTime, true);
+        var newTask = LogQueryService.GetLogsAsync(ConnectionId, startDateTime, endDateTime, true);
 
         if (newTask is null)
         {
@@ -57,7 +57,7 @@ public partial class ApiRequestLogsComponent : ComponentBase, IDisposable
         _showModal = true;
         _response = null;
 
-        var task = AppStateService.ApiRequestLogsTasks.GetValueOrDefault(ConnectionId);
+        var task = LogCacheService.LogTasks.GetValueOrDefault(ConnectionId);
         if (task is not null) _response = await task;
 
         StateHasChanged();

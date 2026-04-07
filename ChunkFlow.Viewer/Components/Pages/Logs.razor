@@ -9,14 +9,14 @@
   <header class="viewer-toolbar">
     <h1>ChunkFlow Viewer</h1>
     <div class="viewer-actions">
-      <button class="btn btn-fetch" @onclick="FetchLogsAsync" disabled="@_fetching">@(_fetching ? _statusMessage : "Fetch Logs")</button>
+      <button class="btn btn-get-logs" @onclick="GetLogsAsync" disabled="@_loading">@(_loading ? _statusMessage : "Get Logs")</button>
       <button class="btn btn-clear" @onclick="ClearLogs" disabled="@(_logs.Count == 0)">Clear Logs</button>
       <div class="viewer-mode-toggle">
         <span>Mode:</span>
-        <button type="button" class="btn-mode @(_streamingMode ? "active" : "")" @onclick="@(() => SetMode(true))" disabled="@_fetching">Streaming</button>
-        <button type="button" class="btn-mode @(!_streamingMode ? "active" : "")" @onclick="@(() => SetMode(false))" disabled="@_fetching">Get All</button>
+        <button type="button" class="btn-mode @(_streamingMode ? "active" : "")" @onclick="@(() => SetMode(true))" disabled="@_loading">Streaming</button>
+        <button type="button" class="btn-mode @(!_streamingMode ? "active" : "")" @onclick="@(() => SetMode(false))" disabled="@_loading">Get All</button>
       </div>
-      @if (_fetching)
+      @if (_loading)
       {
         <span class="viewer-progress" aria-label="In progress"></span>
         @if (!string.IsNullOrEmpty(_pendingClientUrl))
@@ -25,9 +25,9 @@
         }
       }
       <span class="viewer-counter">Received @_logs.Count.ToString("N0") logs</span>
-      @if (_lastFetchElapsedMs.HasValue)
+      @if (_lastLoadElapsedMs.HasValue)
       {
-        <span class="viewer-timing">@(_streamingMode ? "Streaming" : "Get All"): @(_lastFetchElapsedMs.Value / 1000.0) s</span>
+        <span class="viewer-timing">@(_streamingMode ? "Streaming" : "Get All"): @(_lastLoadElapsedMs.Value / 1000.0) s</span>
       }
     </div>
   </header>
@@ -37,11 +37,11 @@
     {
       <p class="viewer-error">@_errorMessage</p>
     }
-    @if (_lastFetchElapsedMs.HasValue && _logs.Count == 0 && string.IsNullOrEmpty(_errorMessage))
+    @if (_lastLoadElapsedMs.HasValue && _logs.Count == 0 && string.IsNullOrEmpty(_errorMessage))
     {
-      <p class="viewer-error">No logs received. Generate logs in the Client first, then try Fetch again. Allow popups for the Client tab.</p>
+      <p class="viewer-error">No logs received. Generate logs in the Client first, then try Get Logs again. Allow popups for the Client tab.</p>
     }
-    <p class="viewer-hint">1) In the Client tab, click &quot;Generate Logs&quot; first. 2) Click &quot;Fetch Logs&quot; here (allow the popup). 3) The Client tab will stream logs to this Viewer.</p>
+    <p class="viewer-hint">1) In the Client tab, click &quot;Generate Logs&quot; first. 2) Click &quot;Get Logs&quot; here (allow the popup). 3) The Client tab will stream logs to this Viewer.</p>
     <div class="viewer-list-container">
       <Virtualize ItemsProvider="@GetLogsProvider" Context="log">
         <div class="log-row">
@@ -57,12 +57,12 @@
 
 @code {
   private readonly List<ApiLog> _logs = new();
-  private bool _fetching;
+  private bool _loading;
   private bool _streamingMode = true;
-  private string _statusMessage = "Fetch Logs";
+  private string _statusMessage = "Get Logs";
   private string _errorMessage = string.Empty;
   private string _pendingClientUrl = string.Empty;
-  private double? _lastFetchElapsedMs;
+  private double? _lastLoadElapsedMs;
 
   private void SetMode(bool streaming)
   {
@@ -85,17 +85,17 @@
   {
     if (_logs.Count == 0) return;
     _logs.Clear();
-    _lastFetchElapsedMs = null;
+    _lastLoadElapsedMs = null;
     _errorMessage = string.Empty;
     StateHasChanged();
   }
 
-  private async Task FetchLogsAsync()
+  private async Task GetLogsAsync()
   {
-    if (_fetching) return;
-    _fetching = true;
+    if (_loading) return;
+    _loading = true;
     _errorMessage = string.Empty;
-    _lastFetchElapsedMs = null;
+    _lastLoadElapsedMs = null;
     _pendingClientUrl = string.Empty;
     _logs.Clear();
     _statusMessage = "Opening Client…";
@@ -136,18 +136,18 @@
         StateHasChanged();
       }
       sw.Stop();
-      _lastFetchElapsedMs = sw.Elapsed.TotalMilliseconds;
+      _lastLoadElapsedMs = sw.Elapsed.TotalMilliseconds;
     }
     catch (Exception ex)
     {
-      Logger.LogError(ex, "Fetch logs failed");
-      _errorMessage = $"Fetch failed: {ex.Message}. Ensure API and Client are running and allow popups.";
+      Logger.LogError(ex, "Get logs failed");
+      _errorMessage = $"Get logs failed: {ex.Message}. Ensure API and Client are running and allow popups.";
     }
     finally
     {
-      _fetching = false;
+      _loading = false;
       _pendingClientUrl = string.Empty;
-      _statusMessage = "Fetch Logs";
+      _statusMessage = "Get Logs";
       StateHasChanged();
     }
   }
